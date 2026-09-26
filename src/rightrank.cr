@@ -7,12 +7,8 @@ module RightRank
   VERSION = "0.1.0"
   API     = ENV["RIGHTRANK_API"]? || "https://rightrank.com/api/v1"
 
-  # An ACON exception, so Athena shows only the message and exits 1.
-  class Error < ACON::Exception::Runtime
-    def initialize(message : String)
-      super(message, 1)
-    end
-  end
+  # An ACON exception, so Athena shows only the message; raise it with exit code 1.
+  alias Error = ACON::Exception::Runtime
 
   # Performs a GET on the API. Specs replace it to avoid the network.
   class_property fetch : Proc(String, HTTP::Client::Response) = ->(path : String) do
@@ -23,15 +19,15 @@ module RightRank
     query = URI::Params.build { |q| params.each { |k, v| q.add k.to_s, v.to_s unless v.nil? } }
     res = fetch.call(query.empty? ? path : "#{path}?#{query}")
     return res.body if res.success?
-    raise Error.new("Rate limited by the RightRank API. Retry after #{res.headers["Retry-After"]? || "a few"} seconds.") if res.status_code == 429
-    raise Error.new((JSON.parse(res.body)["error"]?.try(&.as_s?) rescue nil) || "HTTP #{res.status_code} for #{path}")
+    raise Error.new("Rate limited by the RightRank API. Retry after #{res.headers["Retry-After"]? || "a few"} seconds.", 1) if res.status_code == 429
+    raise Error.new((JSON.parse(res.body)["error"]?.try(&.as_s?) rescue nil) || "HTTP #{res.status_code} for #{path}", 1)
   end
 
   # Returns the /models/:slug body for free text: the `q` match whose slug, name or provider model ID equals it, else the first.
   def self.model(name : String) : String
     models = JSON.parse(get("/models", q: name, per_page: 100)).as_a
-    model = models.find { |m| {m["slug"], m["name"]}.any?(&.as_s.compare(name, true).zero?) || m["provider_model_ids"].as_a.includes?(name) } || models.first?
-    raise Error.new("No model matches '#{name}'.") unless model
+    model = models.find { |m| ([m["slug"], m["name"]] + m["provider_model_ids"].as_a).any?(&.as_s.compare(name, true).zero?) } || models.first?
+    raise Error.new("No model matches '#{name}'.", 1) unless model
     get("/models/#{model["slug"]}")
   end
 end

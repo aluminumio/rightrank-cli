@@ -8,14 +8,14 @@ def fixture(name : String) : String
   File.read("#{__DIR__}/fixtures/#{name}.json")
 end
 
-# Serves the fixture of the first matching path prefix; any other path is a 404.
-def stub(routes : Hash(String, String), status = 200, headers = HTTP::Headers{"X-Total-Count" => "3"})
+# Serves the fixture (or inline JSON array) of the first matching path prefix; any other path is a 404.
+def stub(routes : Hash(String, String), status = 200, headers = HTTP::Headers.new)
   REQUESTS.clear
   RightRank.fetch = ->(path : String) do
     REQUESTS << path
     key = routes.keys.find { |k| path.starts_with? k }
-    return HTTP::Client::Response.new(status, fixture(routes[key]), headers) if key
-    path.includes?('?') ? HTTP::Client::Response.new(200, "[]") : HTTP::Client::Response.new(404, %({"error":"Unknown model: x"}))
+    return HTTP::Client::Response.new(status, routes[key].starts_with?('[') ? routes[key] : fixture(routes[key]), headers) if key
+    HTTP::Client::Response.new(404, %({"error":"Unknown benchmark or category: nope"}))
   end
 end
 
@@ -106,11 +106,14 @@ describe RightRank do
     out.should contain "Retry after 42 seconds."
   end
 
-  it "reports API errors" do
-    stub({} of String => String)
+  it "reports API errors and unknown models" do
+    stub({"/models?" => "[]"})
+    status, out = run({"command" => "leaderboard", "-b" => "nope"})
+    status.should eq ACON::Command::Status::FAILURE
+    out.should contain "Unknown benchmark or category: nope"
     status, out = run({"command" => "pricing", "--model" => "x"})
     status.should eq ACON::Command::Status::FAILURE
-    REQUESTS.should eq ["/models?q=x&per_page=100"]
+    REQUESTS.should eq ["/benchmarks/nope/leaderboard?limit=10", "/models?q=x&per_page=100"]
     out.should contain "No model matches 'x'"
   end
 
