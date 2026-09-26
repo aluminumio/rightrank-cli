@@ -23,10 +23,10 @@ module RightRank
     raise Error.new((JSON.parse(res.body)["error"]?.try(&.as_s?) rescue nil) || "HTTP #{res.status_code} for #{path}", 1)
   end
 
-  # Returns the /models/:slug body for free text: the `q` match whose slug, name or provider model ID equals it, else the first.
+  # Returns the /models/:slug body for free text: the `q` match whose slug, name or provider model ID equals it, else the shortest slug.
   def self.model(name : String) : String
     models = JSON.parse(get("/models", q: name, per_page: 100)).as_a
-    model = models.find { |m| ([m["slug"], m["name"]] + m["provider_model_ids"].as_a).any?(&.as_s.compare(name, true).zero?) } || models.first?
+    model = models.find { |m| ([m["slug"], m["name"]] + m["provider_model_ids"].as_a).any?(&.as_s.compare(name, true).zero?) } || models.min_by?(&.["slug"].as_s.size)
     raise Error.new("No model matches '#{name}'.", 1) unless model
     get("/models/#{model["slug"]}")
   end
