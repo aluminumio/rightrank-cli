@@ -66,11 +66,10 @@ describe RightRank do
     out.should contain "1  Meta: Llama 3.3 70B Instruct  Meta      90.2   $0.10 / $0.32 per M  safety 100.0 coding 70.5"
   end
 
-  it "resolves model names through q, preferring an exact slug, name or provider model ID, else the shortest slug" do
+  it "resolves model names to the first q match" do
     stub({"/models?" => "models", "/models/" => "model_gpt4o"})
-    run({"command" => "compare", "models" => ["gpt-4o-mini", "01-ai-yi-1-5-34b", "gpt"]})
-    REQUESTS.should eq ["/models?q=gpt-4o-mini&per_page=100", "/models/openai-gpt-4o-mini", "/models?q=01-ai-yi-1-5-34b&per_page=100",
-                        "/models/01-ai-yi-1-5-34b", "/models?q=gpt&per_page=100", "/models/01-ai-yi-1-5-34b"]
+    run({"command" => "compare", "models" => ["gpt 4o mini", "openai-gpt-4o"]})
+    REQUESTS.should eq ["/models?q=gpt+4o+mini&per_page=1", "/models/openai-gpt-4o-mini", "/models?q=openai-gpt-4o&per_page=1", "/models/openai-gpt-4o-mini"]
   end
 
   it "compares side by side with mean normalized dimension scores" do
@@ -113,7 +112,7 @@ describe RightRank do
     out.should contain "Unknown benchmark or category: nope"
     status, out = run({"command" => "pricing", "--model" => "x"})
     status.should eq ACON::Command::Status::FAILURE
-    REQUESTS.should eq ["/benchmarks/nope/leaderboard?limit=10", "/models?q=x&per_page=100"]
+    REQUESTS.should eq ["/benchmarks/nope/leaderboard?limit=10", "/models?q=x&per_page=1"]
     out.should contain "No model matches 'x'"
   end
 
