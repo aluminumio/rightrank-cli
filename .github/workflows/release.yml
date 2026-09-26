@@ -14,7 +14,7 @@ jobs:
           - os: ubuntu-latest
             target: linux-amd64
             container: crystallang/crystal:1.21.0-alpine
-            flags: --static
+            flags: --static --link-flags=-s
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
     steps:
