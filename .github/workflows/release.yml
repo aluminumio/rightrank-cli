@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            target: darwin-arm64
+          - os: ubuntu-latest
+            target: linux-amd64
+            container: crystallang/crystal:1.21.0-alpine
+            flags: --static
+    runs-on: ${{ matrix.os }}
+    container: ${{ matrix.container }}
+    steps:
+      - uses: actions/checkout@v5
+      - if: runner.os == 'macOS'
+        run: brew install crystal
+      - run: shards build --production --release --no-debug ${{ matrix.flags }}
+      - run: mv bin/rightrank rightrank-${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rightrank-${{ matrix.target }}
+          path: rightrank-${{ matrix.target }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_PAT: ${{ secrets.RELEASE_PAT }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - run: sha256sum rightrank-* | tee checksums.txt
+      - run: gh release create "$GITHUB_REF_NAME" rightrank-* checksums.txt --repo "$GITHUB_REPOSITORY" --generate-notes
+      - name: Bump the Homebrew tap
+        if: env.RELEASE_PAT != ''
+        run: GH_TOKEN="$RELEASE_PAT" gh api repos/aluminumio/homebrew-tap/dispatches -f event_type=rightrank-cli-released -F "client_payload[version]=${GITHUB_REF_NAME#v}"

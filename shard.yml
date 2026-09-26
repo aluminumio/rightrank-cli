@@ -1,0 +1,13 @@
+name: rightrank-cli
+version: 0.1.0
+crystal: ">= 1.13.0"
+license: MIT
+
+targets:
+  rightrank:
+    main: src/main.cr
+
+dependencies:
+  athena-console:
+    github: athena-framework/console
+    version: ~> 0.4.3
