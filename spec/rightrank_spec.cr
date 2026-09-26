@@ -2,7 +2,6 @@ require "spec"
 require "athena-console/spec"
 require "../src/rightrank"
 
-Colorize.enabled = false
 REQUESTS = [] of String
 
 def fixture(name : String) : String
@@ -67,15 +66,16 @@ describe RightRank do
     out.should contain "1  Meta: Llama 3.3 70B Instruct  Meta      90.2   $0.10 / $0.32 per M  safety 100.0 coding 70.5"
   end
 
-  it "compares models resolved by slug and by provider model ID" do
-    stub({"/models/openai-gpt-4o" => "model_gpt4o", "/models?provider_model_id=gpt-4o-mini" => "models", "/models/openai-gpt-4o-mini" => "model_gpt4o"})
-    _, out = run({"command" => "compare", "models" => ["openai-gpt-4o", "gpt-4o-mini"]})
-    REQUESTS.should eq ["/models/openai-gpt-4o", "/models/gpt-4o-mini", "/models?provider_model_id=gpt-4o-mini", "/models/openai-gpt-4o-mini"]
+  it "resolves model names through q, preferring an exact slug, name or provider model ID" do
+    stub({"/models?" => "models", "/models/" => "model_gpt4o"})
+    run({"command" => "compare", "models" => ["gpt-4o-mini", "01-ai-yi-1-5-34b", "gpt"]})
+    REQUESTS.should eq ["/models?q=gpt-4o-mini&per_page=100", "/models/openai-gpt-4o-mini", "/models?q=01-ai-yi-1-5-34b&per_page=100",
+                        "/models/01-ai-yi-1-5-34b", "/models?q=gpt&per_page=100", "/models/openai-gpt-4o-mini"]
   end
 
   it "compares side by side with mean normalized dimension scores" do
-    stub({"/models/" => "model_gpt4o"})
-    _, out = run({"command" => "compare", "models" => ["openai-gpt-4o", "openai-gpt-4o"]})
+    stub({"/models?" => "models", "/models/" => "model_gpt4o"})
+    _, out = run({"command" => "compare", "models" => ["gpt-4o-mini", "gpt-4o-mini"]})
     out.should contain "Price     $2.50 / $10.00 per M  $2.50 / $10.00 per M"
     out.should match /^speed\s+71\.9\s+71\.9$/m
   end
@@ -85,17 +85,18 @@ describe RightRank do
     _, out = run({"command" => "pricing", "--limit" => "2"})
     REQUESTS.should eq ["/pricing?page=1&per_page=2"]
     out.should contain "A.X-K2               SK Telecom  $0.00 / $0.00 per M  artificial_analysis"
-    stub({"/models/openai-gpt-4o" => "model_gpt4o"})
-    _, out = run({"command" => "pricing", "--model" => "openai-gpt-4o"})
+    stub({"/models?" => "models", "/models/" => "model_gpt4o"})
+    _, out = run({"command" => "pricing", "--model" => "gpt-4o-mini"})
     out.should contain "OpenAI: GPT-4o (openai-gpt-4o)"
     out.should contain "output per million tokens        $10.00"
   end
 
-  it "searches the catalog by every word, exact matches first" do
-    stub({"/models?page=1" => "models"})
-    _, out = run({"command" => "search", "query" => "GPT 4o"})
-    out.lines[1].should start_with "openai-gpt-4o-mini  OpenAI: GPT-4o-mini"
-    out.lines.size.should eq 2
+  it "searches models with q" do
+    stub({"/models?" => "models"})
+    _, out = run({"command" => "search", "query" => ["GPT", "4o"]})
+    REQUESTS.should eq ["/models?q=GPT+4o&per_page=20"]
+    out.lines[1].should start_with "openai-gpt-4o-mini        OpenAI: GPT-4o-mini"
+    out.lines.size.should eq 4
   end
 
   it "reports a 429 with its Retry-After" do
@@ -109,6 +110,12 @@ describe RightRank do
     stub({} of String => String)
     status, out = run({"command" => "pricing", "--model" => "x"})
     status.should eq ACON::Command::Status::FAILURE
+    REQUESTS.should eq ["/models?q=x&per_page=100"]
     out.should contain "No model matches 'x'"
+  end
+
+  it "keeps sub-cent prices visible and names unpriced models' reason" do
+    RightRank::Format.price(JSON.parse(%({"per_image": 0.004, "per_video_second": 0.1}))).should eq "$0.004/image, $0.10/video s"
+    RightRank::Format.price(JSON.parse(%({"input_per_million_tokens": null, "reason": "subscription_only"}))).should eq "subscription_only"
   end
 end
