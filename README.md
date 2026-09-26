@@ -29,7 +29,7 @@ rightrank pricing --model gpt-4o
 rightrank search claude opus
 ```
 
-`compare` and `pricing --model` take a RightRank slug (`openai-gpt-4o`), a provider model ID (`gpt-4o`) or a name (`gemini 2.5 pro`). They find the model with the API's `q` search and prefer an exact slug, name or ID match.
+`compare` and `pricing --model` take a RightRank slug (`openai-gpt-4o`), a provider model ID (`gpt-4o`) or a name (`gemini 2.5 pro`). They take the closest match of the API's `q` search.
 
 Add `--json` to any command to print the raw API JSON. Colors are off when the output is not a terminal or `NO_COLOR` is set; `--ansi` and `--no-ansi` override this. `RIGHTRANK_API` overrides the API base URL.
 
