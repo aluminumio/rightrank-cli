@@ -66,11 +66,11 @@ describe RightRank do
     out.should contain "1  Meta: Llama 3.3 70B Instruct  Meta      90.2   $0.10 / $0.32 per M  safety 100.0 coding 70.5"
   end
 
-  it "resolves model names through q, preferring an exact slug, name or provider model ID" do
+  it "resolves model names through q, preferring an exact slug, name or provider model ID, else the shortest slug" do
     stub({"/models?" => "models", "/models/" => "model_gpt4o"})
     run({"command" => "compare", "models" => ["gpt-4o-mini", "01-ai-yi-1-5-34b", "gpt"]})
     REQUESTS.should eq ["/models?q=gpt-4o-mini&per_page=100", "/models/openai-gpt-4o-mini", "/models?q=01-ai-yi-1-5-34b&per_page=100",
-                        "/models/01-ai-yi-1-5-34b", "/models?q=gpt&per_page=100", "/models/openai-gpt-4o-mini"]
+                        "/models/01-ai-yi-1-5-34b", "/models?q=gpt&per_page=100", "/models/01-ai-yi-1-5-34b"]
   end
 
   it "compares side by side with mean normalized dimension scores" do
